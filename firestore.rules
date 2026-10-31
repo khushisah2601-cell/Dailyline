@@ -1,0 +1,157 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global Safety Net: Default-deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidId(id) {
+      return id is string
+        && id.size() >= 1
+        && id.size() <= 128
+        && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    // Bootstrapped App Owner check with mandatory email_verified enforcement
+    function isBootstrappedOwner() {
+      return isVerifiedUser()
+        && request.auth.token.email == 'ranjeetkumarsah286@gmail.com';
+    }
+
+    function isValidSuggestion(data) {
+      return data.keys().hasAll([
+          'authorUid',
+          'authorName',
+          'authorEmail',
+          'category',
+          'title',
+          'message',
+          'status',
+          'ownerReply',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'authorUid',
+          'authorName',
+          'authorEmail',
+          'category',
+          'title',
+          'message',
+          'status',
+          'ownerReply',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.authorUid is string
+        && data.authorUid.size() >= 1
+        && data.authorUid.size() <= 128
+        && data.authorUid.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.authorName is string
+        && data.authorName.size() >= 1
+        && data.authorName.size() <= 80
+        && data.authorEmail is string
+        && data.authorEmail.size() >= 3
+        && data.authorEmail.size() <= 254
+        && data.category is string
+        && data.category.size() >= 2
+        && data.category.size() <= 20
+        && data.category in ['feature', 'improvement', 'ux', 'bug']
+        && data.title is string
+        && data.title.size() >= 3
+        && data.title.size() <= 120
+        && data.message is string
+        && data.message.size() >= 5
+        && data.message.size() <= 1500
+        && data.status is string
+        && data.status.size() >= 3
+        && data.status.size() <= 20
+        && data.status in ['new', 'reviewing', 'planned', 'implemented', 'archived']
+        && data.ownerReply is string
+        && data.ownerReply.size() <= 1000
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    match /suggestions/{suggestionId} {
+      // PII Isolation: Only the author or verified app owner may read individual suggestion documents
+      allow get: if isVerifiedUser()
+        && isValidId(suggestionId)
+        && (existing().authorUid == request.auth.uid || isBootstrappedOwner());
+
+      // Query Enforcer: Clients must scope queries to their own authorUid unless verified app owner
+      allow list: if isVerifiedUser()
+        && (resource.data.authorUid == request.auth.uid || isBootstrappedOwner());
+
+      // Create: Strict identity binding, initial state enforcement, and server timestamps
+      allow create: if isVerifiedUser()
+        && isValidId(suggestionId)
+        && isValidSuggestion(incoming())
+        && incoming().authorUid == request.auth.uid
+        && incoming().authorEmail == request.auth.token.email
+        && incoming().status == 'new'
+        && incoming().ownerReply == ''
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+
+      // Action-Based Update: Wrapped in validation blueprint + immutable fields + server timestamp
+      allow update: if isVerifiedUser()
+        && isValidId(suggestionId)
+        && isValidSuggestion(incoming())
+        && incoming().authorUid == existing().authorUid
+        && incoming().authorEmail == existing().authorEmail
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          // Action 1: Author edits content while suggestion is still 'new' (locked once triaged/archived)
+          (
+            existing().authorUid == request.auth.uid
+            && existing().status == 'new'
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'category',
+              'title',
+              'message',
+              'authorName',
+              'updatedAt'
+            ])
+          )
+          ||
+          // Action 2: Verified App Owner updates triage status or replies (with admin state override)
+          (
+            isBootstrappedOwner()
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'status',
+              'ownerReply',
+              'updatedAt'
+            ])
+          )
+        );
+
+      // Delete: Author may delete while still 'new', or verified App Owner may delete anytime
+      allow delete: if isVerifiedUser()
+        && isValidId(suggestionId)
+        && (
+          (existing().authorUid == request.auth.uid && existing().status == 'new')
+          || isBootstrappedOwner()
+        );
+    }
+  }
+}

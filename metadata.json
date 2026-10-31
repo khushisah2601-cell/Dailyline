@@ -1,0 +1,6 @@
+{
+  "name": "Dayline",
+  "description": "Dump everything on your mind, in any language. Dayline turns it into a realistic plan for the hours you have.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

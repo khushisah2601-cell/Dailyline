@@ -1,0 +1,93 @@
+{
+  "entities": {
+    "Suggestion": {
+      "title": "Suggestion",
+      "description": "User-submitted product suggestion, improvement idea, or bug report delivered to the Dayline app owner inbox.",
+      "type": "object",
+      "properties": {
+        "authorUid": {
+          "type": "string",
+          "description": "Firebase Auth UID of the user who submitted the suggestion.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "authorName": {
+          "type": "string",
+          "description": "Display name of the user submitting the suggestion.",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "authorEmail": {
+          "type": "string",
+          "format": "email",
+          "description": "Verified Google account email of the sender (visible only to the sender and the verified app owner).",
+          "minLength": 3,
+          "maxLength": 254
+        },
+        "category": {
+          "type": "string",
+          "description": "Type of suggestion submitted by the user.",
+          "enum": ["feature", "improvement", "ux", "bug"],
+          "minLength": 2,
+          "maxLength": 20
+        },
+        "title": {
+          "type": "string",
+          "description": "Concise summary of what to add or change.",
+          "minLength": 3,
+          "maxLength": 120
+        },
+        "message": {
+          "type": "string",
+          "description": "Detailed explanation of the user's suggestion or feedback.",
+          "minLength": 5,
+          "maxLength": 1500
+        },
+        "status": {
+          "type": "string",
+          "description": "Triage workflow status managed by the app owner.",
+          "enum": ["new", "reviewing", "planned", "implemented", "archived"],
+          "minLength": 3,
+          "maxLength": 20
+        },
+        "ownerReply": {
+          "type": "string",
+          "description": "Optional response note from the app owner back to the user.",
+          "minLength": 0,
+          "maxLength": 1000
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the suggestion was created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the suggestion was last updated."
+        }
+      },
+      "required": [
+        "authorUid",
+        "authorName",
+        "authorEmail",
+        "category",
+        "title",
+        "message",
+        "status",
+        "ownerReply",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/suggestions/{suggestionId}": {
+      "schema": {
+        "$ref": "#/entities/Suggestion"
+      },
+      "description": "Stores user product suggestions and owner triage replies, readable only by the submitting author or the verified app owner."
+    }
+  }
+}
